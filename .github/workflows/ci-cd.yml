@@ -1,0 +1,68 @@
+stages: [build, test, deploy]
+variables:
+  LOG_FILE: log.txt  
+
+build-job: 
+  stage: build
+  script: |
+    echo "Compiling the code..." | tee -a "${LOG_FILE}"
+    echo "Compile complete." |  tee -a "${LOG_FILE}"    
+  artifacts:
+    paths: ["${LOG_FILE}"]
+
+test-job1:
+  stage: test
+  needs:
+    - job: build-job
+      artifacts: true
+  script: |
+    test -f "${LOG_FILE}"
+    echo "Running test_job1... This will take about 5 seconds." | tee -a "${LOG_FILE}"
+    wc -c "${LOG_FILE}" | awk '{print "size(bytes):",$1}'
+    sleep 5
+
+test-job2:
+  stage: test
+  needs:
+    - job: test-job1
+      artifacts: true
+  script: |
+    test -f "${LOG_FILE}"
+    echo "Running test_job2... This will take about 5 seconds." | tee -a "${LOG_FILE}"
+    wc -c "${LOG_FILE}" | awk '{print "size(bytes):",$1}'
+    sleep 5
+
+test-job3:
+  stage: test
+  needs:
+    - job: test-job2
+      artifacts: true
+  script: |
+    test -f "${LOG_FILE}"
+    echo "Running test_job3... This will take about 5 seconds." | tee -a "${LOG_FILE}"
+    wc -c "${LOG_FILE}" | awk '{print "size(bytes):",$1}'
+    sleep 5
+
+deploy_to_dev_job:
+  stage: deploy
+  resource_group: dev
+  needs:
+    - job: test-job3
+  script: |
+    echo "ENV-DEV - Deploying application..." | tee -a "${LOG_FILE}"
+    echo "Application successfully deployed."
+    cat -n "${LOG_FILE}"
+
+deploy_to_prd_job:
+  stage: deploy
+  resource_group: production
+  needs:
+    - job: deploy_to_dev_job
+  script: |
+    echo "ENV-PRD - Deploying application..." | tee -a "${LOG_FILE}"
+    echo "Application successfully deployed."
+    cat -n "${LOG_FILE}"
+  rules:
+    - if: '$CI_COMMIT_BRANCH=="main"'
+      when: manual
+      allow_failure: false
